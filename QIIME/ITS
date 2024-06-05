@@ -1,0 +1,195 @@
+############################################################
+				  ITS AMPLICON ANALYSIS - QIIME2
+ ###########################################################
+#ITS QIIME2 - August, 2022
+Giovana Slanzon
+
+#Prepare working space
+source activate qiime2-2022.2
+cd /Users/giovanaslanzon/Desktop/CKI_ITS2
+ 
+#Import demultiplexed data into QIIME2
+mkdir imported_seqs
+qiime tools import \
+--type 'SampleData[PairedEndSequencesWithQuality]' \
+--input-path metadata/manifest.csv \
+--input-format PairedEndFastqManifestPhred33 \
+--output-path imported_seqs/imported-paired-end-seqs.qza
+ 
+#Create a summary of demultiplexed data
+qiime demux summarize \
+  --i-data imported_seqs/imported-paired-end-seqs.qza \
+  --o-visualization imported_seqs/imported-paired-end-seqs.qzv
+ 
+#Removing primers using cutadapt
+mkdir trimmed_seqs
+qiime cutadapt trim-paired \
+  --i-demultiplexed-sequences imported_seqs/imported-paired-end-seqs.qza \
+  --p-adapter-f '^AACTTTYRRCAAYGGATCWCT...AYTTAAGCATATCAATAAGCGGAGGCT'  \
+  --p-adapter-r '^AGCCTCCGCTTATTGATATGCTTAART...AGWGATCCRTTGYYRAAAGTT'  \
+  --p-cores 4 \
+  --o-trimmed-sequences trimmed_seqs/trimmed-seqs-Fungal_ITS.qza \
+  --p-discard-untrimmed \
+  --p-overlap 10 \
+  --p-minimum-length 50 \
+  --verbose \
+  --p-error-rate 0.13 
+ 
+qiime demux summarize \
+  --i-data trimmed_seqs/trimmed-seqs-Fungal_ITS.qza \
+  --o-visualization trimmed_seqs/trimmed-seqs-Fungal_ITS.qzv
+ 
+#Sequence quality filter and denoise
+mkdir dada2
+qiime dada2 denoise-paired \
+  --i-demultiplexed-seqs trimmed_seqs/trimmed-seqs-Fungal_ITS.qza \
+  --p-trim-left-f 0 \
+  --p-trunc-len-f  216 \
+  --p-trim-left-r 0 \
+  --p-trunc-len-r 165 \
+  --o-representative-sequences dada2/rep-seqs-Fungal_ITS.qza \
+  --o-table dada2/table-Fungal_ITS.qza \
+  --o-denoising-stats dada2/denoising-stats-Fungal_ITS.qza \
+  --p-n-threads 0 \
+  --p-n-reads-learn 1000000
+ 
+#Tabulate the denoising statistics
+qiime metadata tabulate \
+  --m-input-file dada2/denoising-stats-Fungal_ITS.qza \
+  --o-visualization dada2/denoising-stats-Fungal_ITS.qzv
+Results: 21-87% of the data was kept after denoising step.
+ 
+#Summarize
+qiime feature-table summarize \
+  --i-table dada2/table-Fungal_ITS.qza \
+  --o-visualization dada2/table-Fungal_ITS.qzv \
+  --m-sample-metadata-file metadata/metadata.txt 
+ 
+qiime feature-table tabulate-seqs \
+  --i-data dada2/rep-seqs-Fungal_ITS.qza \
+  --o-visualization dada2/rep-seqs-Fungal_ITS.qzv
+ Results: 91 samples sequenced; 3,434 ASVs; 3,842,522  sequences passed quality filters. Mean frequency is  42,225; Median frequency is 34,273.
+
+#Cluster OTUs by using vsearch de novo
+mkdir clustering
+ qiime vsearch cluster-features-de-novo \
+  --i-table dada2/table-Fungal_ITS.qza  \
+  --i-sequences dada2/rep-seqs-Fungal_ITS.qza \
+  --p-perc-identity 0.97 \
+  --o-clustered-table clustering/clustered-table-Fungal_ITS.qza \
+  --o-clustered-sequences clustering/clustered-rep-seqs-Fungal_ITS.qza
+ 
+ #Summarize
+qiime feature-table summarize \
+  --i-table clustering/clustered-table-Fungal_ITS.qza \
+  --m-sample-metadata-file metadata/metadata.txt \ 
+  --o-visualization clustering/clustered-table-Fungal_ITS.qzv
+ Results: 91 samples sequenced; 1,776 OTUs; 3,842,522  sequences. Mean frequency is  42,225; Median frequency is 34,273.
+
+#Assign taxonomy
+qiime tools import \
+  --type 'FeatureData[Taxonomy]' \
+  --input-format HeaderlessTSVTaxonomyFormat \
+  --input-path sh_taxonomy_qiime_ver8_dynamic_s_10.05.2021_dev.txt \
+  --output-path ref-taxonomy.qza
+
+qiime feature-classifier classify-consensus-vsearch \
+  --i-query clustering/clustered-rep-seqs-Fungal_ITS.qza \
+  --i-reference-reads sh_refs_qiime_ver8_dynamic_s_10.05.2021_dev.qza \
+  --i-reference-taxonomy ref-taxonomy.qza \
+  --p-perc-identity 0.97 \
+  --o-classification taxonomy-fung-vsearch.qza \
+  --verbose
+ 
+qiime metadata tabulate \
+  --m-input-file taxonomy-fung-vsearch.qza \                       
+  --o-visualization taxonomy-fung-vsearch.qzv       
+ 
+#Quality control of OTUs
+qiime quality-control evaluate-seqs \
+  --i-query-sequences clustering/clustered-rep-seqs-Fungal_ITS.qza \   
+  --i-reference-sequences sh_refs_qiime_ver8_dynamic_s_10.05.2021_dev.qza \    
+  --o-visualization clustering/clustered-seqs-evaluated-fung.qzv    
+ 
+qiime quality-control exclude-seqs \
+  --i-query-sequences clustering/clustered-rep-seqs-Fungal_ITS.qza \
+  --i-reference-sequences sh_refs_qiime_ver8_dynamic_s_10.05.2021_dev.qza \
+  --p-method blast \
+  --p-perc-identity 0.0 \
+  --p-perc-query-aligned 0.85 \
+  --o-sequence-hits clustering/quality-control-hits_fung.qza \
+  --o-sequence-misses clustering/quality-control-misses_fung.qza
+
+qiime tools export \
+  --input-path clustering/quality-control-misses_fung.qza \    
+  --output-path clustering/exported-quality-control 
+ 
+#Filtering the main feature table to exclude OTUs that are considered missed by the previous step
+ 
+mkdir filtered_tables
+qiime feature-table filter-features \
+  --i-table clustering/clustered-table-Fungal_ITS.qza \   
+  --m-metadata-file clustering/quality-control-misses_fung.qza \    
+  --p-exclude-ids \
+  --o-filtered-table filtered_tables/fung_table-quality-control.qza 
+ 
+#Summarize new table
+qiime feature-table summarize \
+  --i-table filtered_tables/fung_table-quality-control.qza \ 
+  --o-visualization  filtered_tables/fung_table-quality-control.qzv 
+Results: The misses did not blast to anything significant. Out of 1,776 OTUs, 1,456 OTUs were kept. 
+
+#Filter and remove non-fungal OTUs
+qiime taxa filter-table \
+  --i-table filtered_tables/fung_table-quality-control.qza \ 
+  --i-taxonomy taxonomy-fung-vsearch.qza \
+  --p-include k__ \
+  --p-exclude Unassigned,Rhizaria,Protista,Metazoa \
+  --o-filtered-table filtered_tables/table-quality-control-fungi-only.qza 
+ 
+#Summarize table
+qiime feature-table summarize \
+  --i-table filtered_tables/table-quality-control-fungi-only.qza \
+  --o-visualization filtered_tables/table-quality-control-fungi-only.qzv
+ 
+qiime taxa barplot \
+  --i-table filtered_tables/table-quality-control-fungi-only.qza \
+  --i-taxonomy taxonomy-fung-vsearch.qza \
+  --m-metadata-file metadata/metadata.txt \ 
+  --o-visualization taxonomy/taxa-bar-plots-fungi-only.qzv
+Results: After removing non-fungal OTUs, only 786 OTUs were kept.
+
+#Export taxonomy artifact
+qiime tools export \
+--input-path taxonomy-fung-vsearch.qza \
+--output-path exported-taxonomy-Fungal_ITS
+ 
+#Copy and re-name taxonomy file
+cp  exported-taxonomy-Fungal_ITS/taxonomy.tsv exported-taxonomy-Fungal_ITS/biom-taxonomy.tsv
+ 
+#Replace the header of the table with QIIME style formatting
+#OTUID taxonomy         confidence
+ 
+#Export OTU table into BIOM format for further processing
+qiime tools export \
+  --input-path filtered_tables/table-quality-control-fungi-only.qza \
+  --output-path exported-table
+ 
+#Add metadata to the OTU table and convert it to tsv to view
+biom add-metadata \
+ -i exported-table/feature-table.biom \
+ -o exported-table/feature-table-with-taxonomy.biom \
+ --observation-metadata-fp exported-taxonomy-Fungal_ITS/biom-taxonomy.tsv \
+ --sc-separated taxonomy
+ 
+#Convert biom to tsv for analyses elsewhere
+biom convert \
+  -i exported-table/feature-table-with-taxonomy.biom \
+  -o exported-table/feature-table-with-taxonomy.tsv \
+  --to-tsv \
+  --process-obs-metadata taxonomy \
+  --header-key taxonomy
+ 
+Note: Out of the 91 samples sequenced in this run, 42 were qSIP samples analyzed in this project. 
+The abundance table was filtered to only contain qSIP samples to be used in the analyses. A total of 423 OTUs were present in these samples. 
+###########################################################
