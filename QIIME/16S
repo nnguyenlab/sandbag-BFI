@@ -1,0 +1,166 @@
+############################################################
+				      16S AMPLICON ANALYSIS - QIIME2
+ ###########################################################
+
+#16S rRNA QIIME2 - August, 2022
+Giovana Slanzon
+
+#Prepare working space
+source activate qiime2-2022.2
+cd /Users/giovanaslanzon/Desktop/CKI_16S
+
+#Import demultiplexed data into QIIME2
+mkdir imported_seqs
+
+qiime tools import \
+--type 'SampleData[PairedEndSequencesWithQuality]' \
+--input-path metadata/manifest.csv \
+--input-format PairedEndFastqManifestPhred33 \
+--output-path imported_seqs/imported-paired-end-seqs.qza
+
+#Create a summary of demultiplexed data
+qiime demux summarize \
+--i-data imported_seqs/imported-paired-end-seqs.qza \
+--o-visualization imported_seqs/demux.qzv
+
+#View the summary file and determine the quality of the sequences
+qiime tools view demux.qzv
+
+#Remove primers with cutadapt
+mkdir 16S
+mkdir 16S/trimmed_seqs
+qiime cutadapt trim-paired \
+--i-demultiplexed-sequences imported_seqs/imported-paired-end-seqs.qza \
+--p-adapter-f '^GTGYCAGCMGCCGCGGTAA...ATTAGAWACCCBNGTAGTCC' \
+--p-adapter-r '^GGACTACNVGGGTWTCTAAT...TTACCGCGGCKGCTGRCAC' \
+--p-cores 4 \
+--o-trimmed-sequences 16S/trimmed_seqs/trimmed-seqs-16S.qza \
+--p-discard-untrimmed \
+--p-overlap 10 \
+--p-minimum-length 50 \
+--verbose \
+--p-error-rate 0.13
+
+qiime demux summarize \
+--i-data 16S/trimmed_seqs/trimmed-seqs-16S.qza \
+--o-visualization 16S/trimmed_seqs/trimmed-seqs-16S.qzv
+ 
+#Sequence quality filter and denoise
+#Filter sequences (quality filtering) using DADA2
+mkdir 16S/dada2
+qiime dada2 denoise-paired \
+--i-demultiplexed-seqs 16S/trimmed_seqs/trimmed-seqs-16S.qza \
+--p-trim-left-f 0 \
+--p-trunc-len-f 222 \
+--p-trim-left-r 0 \
+--p-trunc-len-r 184 \
+--o-representative-sequences 16S/dada2/rep-seqs-16S.qza \
+--o-table 16S/dada2/table-16S.qza \
+--o-denoising-stats 16S/dada2/denoising-stats-16S.qza \
+--p-n-threads 0 \
+--p-n-reads-learn 1000000
+ 
+#Tabulate the denoising statistics
+qiime metadata tabulate \
+--m-input-file 16S/dada2/denoising-stats-16S.qza \
+--o-visualization 16S/dada2/denoising-stats-16S.qzv
+Results: 30-93% of the data was kept after the denoising step. 
+
+#Summarize and view summaries of the feature table (OTU table) and feature data (representative seqs)
+qiime feature-table summarize \
+--i-table 16S/dada2/table-16S.qza \
+--o-visualization 16S/dada2/table-16S.qzv \
+--m-sample-metadata-file metadata/metadata.txt 
+
+qiime feature-table tabulate-seqs \
+--i-data 16S/dada2/rep-seqs-16S.qza \
+--o-visualization 16S/dada2/rep-seqs-16S.qzv
+Results: 91 samples sequenced; 19,073 ASVs; 8,049,124  sequences passed quality filters. Mean frequency is  88,451; median frequency is 75,381. 
+
+#Assign taxonomy using sklearn
+#For 16S assign taxonomy to rep-seqs.qza; use the SILVA 16S database, trimmed to the gene region of interest (V4, 515-806)
+mkdir 16S/taxonomy
+qiime feature-classifier classify-sklearn \
+--i-classifier qiime_classifiers/silva-138-99-515-806-nb-classifier.qza \
+--i-reads 16S/dada2/rep-seqs-16S.qza \
+--o-classification 16S/taxonomy/taxonomy-16S.qza
+
+#Connect OTU data to taxonomy and create bar plots
+qiime metadata tabulate \
+--m-input-file 16S/taxonomy/taxonomy-16S.qza \
+--o-visualization 16S/taxonomy/taxonomy-16S.qzv
+
+qiime taxa barplot \
+--i-table 16S/dada2/table-16S.qza \
+--i-taxonomy 16S/taxonomy/taxonomy-16S.qza \
+--m-metadata-file metadata/metadata.txt \ 
+--o-visualization 16S/taxonomy/taxa-bar-plots-16S.qzv
+
+#Quality control of ASVs
+#Filter table to remove Unassigned, mitochondria, and chloroplast sequences
+mkdir 16S/filtered_tables
+
+qiime taxa filter-table \
+--i-table 16S/dada2/table-16S.qza \
+--i-taxonomy 16S/taxonomy/taxonomy-16S.qza \
+--p-exclude Unassigned,mitochondria,chloroplast,Eukaryota \
+--o-filtered-table 16S/filtered_tables/table-prok-only.qza
+
+qiime feature-table summarize \
+--i-table 16S/filtered_tables/table-prok-only.qza \
+--o-visualization 16S/filtered_tables/table-prok-only.qzv \
+--m-sample-metadata-file metadata/metadata.txt 
+Results: After quality control, 18,800 ASVs were kept.
+
+#Create another taxa barplot for data exploration
+qiime taxa barplot \
+--i-table 16S/filtered_tables/table-prok-only.qza \
+--i-taxonomy 16S/taxonomy/taxonomy-16S.qza \
+--m-metadata-file metadata/metadata.txt \ 
+--o-visualization 16S/taxonomy/taxa_barplot_table-prok-only.qzv
+
+mkdir 16S/filtered_seqs
+qiime feature-table filter-seqs \
+--i-data 16S/dada2/rep-seqs-16S.qza \
+--i-table 16S/filtered_tables/table-prok-only.qza \
+--o-filtered-data 16S/filtered_seqs/rep-seqs-prok-only.qza
+
+qiime tools export \
+--input-path 16S/taxonomy/taxonomy-16S.qza \
+--output-path 16S/exported-taxonomy-16S
+
+#Export taxonomy artifact
+qiime tools export \
+  --input-path taxonomy.qza \
+  --output-path exported-taxonomy
+
+#Copy and re-name taxonomy file
+cp exported-taxonomy/taxonomy.tsv exported-taxonomy/biom-taxonomy.tsv
+
+#Replace the header of the table with QIIME style formatting
+#OTUID	taxonomy	confidence
+
+#Export OTU table into biom format for further processing
+qiime tools export \
+--input-path 16S/filtered_tables/table-prok-only.qza \
+--output-path 16S/exported-table-prok
+
+#Add metadata to the OTU table and convert it to tsv to view
+biom add-metadata \
+-i 16S/exported-table-prok/feature-table.biom \
+-o 16S/exported-table-prok/feature-table-with-taxonomy_prok_only.biom \
+--observation-metadata-fp 16S/exported-taxonomy-16S/biom-taxonomy-16S.tsv \
+--sc-separated taxonomy
+
+#Convert biom to tsv for analyses elsewhere
+biom convert \
+-i 16S/exported-table-prok/feature-table-with-taxonomy_prok_only.biom \
+-o 16S/exported-table-prok/feature-table-with-taxonomy_prok_only.tsv \
+--to-tsv \
+--process-obs-metadata taxonomy \
+--header-key taxonomy
+
+Note: Out of the 91 samples sequenced in this run, 42 were qSIP samples analyzed in this project. 
+The abundance table was filtered to only contain qSIP samples to be used in the analyses. 
+Out of the 18,800 ASVs, 7785 ASVs were present in these samples. 
+############################################################
