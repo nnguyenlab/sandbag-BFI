@@ -1,0 +1,108 @@
+ ############################################################
+		Rainbow plot - 16S and ITS combined - Figure 2
+ ###########################################################
+#16S - EAF was calculated in the previous step (qSIP pipeline)
+#Next step is to add the taxonomy table, group by genus, calculate the mean EAF, and visualize 
+dat.tax.merge <- merge(eaf, taxonomy_16S)
+#We used BLAST to identify some of these unidentified ASVs to the genus level
+#Next I will import the excel file that has the updated taxonomy 
+dat.tax.merge.genus.corrected <- read_excel("eaf_tax.corrected.xlsx")
+genus.median.dat <- dat.tax.merge.genus.corrected %>%
+group_by(Genus) %>%
+summarize(mean.eaf.genus = mean(observed_EAF, na.rm=TRUE))
+genus.median.lower <- dat.tax.merge.genus.corrected %>%
+group_by(Genus) %>%
+summarize(lower.genus = mean(lower, na.rm=TRUE)) 
+genus.median.upper <- dat.tax.merge.genus.corrected %>%
+group_by(Genus) %>%
+summarize(upper.genus = mean(upper, na.rm=TRUE)) 
+genus.median.resample <- dat.tax.merge.genus.corrected %>%
+group_by(Genus) %>%
+summarize(mean_resampled_EAF = mean(mean_resampled_EAF, na.rm=TRUE)) 
+genus.merge <- merge(genus.median.dat, genus.median.lower)
+genus.merge <- merge(genus.merge, genus.median.upper)
+genus.merge <- merge(genus.merge, genus.median.resample)
+#Add the phylum 
+genus_phylum_df <- select(dat.tax.merge.genus.corrected, Genus, Phylum)
+#Removing duplicates
+genus_phylum_df <- genus_phylum_df[!duplicated(genus_phylum_df$Genus), ]
+genus.median.taxonomy <- inner_join(genus.merge, genus_phylum_df, by="Genus")
+
+#Rainbow plot 
+library(ggplot2)
+mydat<-genus.median.taxonomy[order(genus.median.taxonomy$Phylum,-genus.median.taxonomy$mean.eaf.genus),]
+mydat$graph.order<-mydat$graph.order<-c(1:dim(mydat)[1])
+p<-ggplot(mydat,aes(x=factor(graph.order),mean.eaf.genus,ymin=lower.genus,ymax=upper.genus,color=Phylum)) + 
+  geom_pointrange(size=0.25) + geom_linerange() + geom_hline(yintercept=0,linetype='dashed',alpha=0.5) + 
+  labs(x="Genus",y="Atom Fraction Excess") + theme_classic() + 
+  theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())
+p
+
+## Plotting ASVs instead of genera
+mydat.asv  <-eaf_tax[order(eaf_tax$Phylum,-eaf_tax$mean_resampled_EAF),]
+mydat.asv$graph.order<-mydat.asv$graph.order<-c(1:dim(mydat.asv)[1])
+p.asv <- ggplot(mydat.asv,aes(x=factor(graph.order),mean_resampled_EAF,ymin=lower,ymax=upper,color=Phylum)) +  
+geom_pointrange(size=0.25) + geom_linerange() + geom_hline(yintercept=0,linetype='dashed',alpha=0.5) +  
+labs(x="Observed Taxa",y="Atom Fraction Excess") + theme_classic() +   theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())
+p.asv
+
+#Same for ITS - EAF was calculated in the previous step (qSIP pipeline)
+dat.tax.merge.its <- merge(eaf_its, taxonomy_ITS_qSIP)
+#We used BLAST to identify some of these unidentified OTUs to the genus level
+#Next I will import this excel file that has the updated taxonomy 
+dat.tax.merge.its.genus.corrected <- read_excel("eaf_tax_ITS_corrected2.xlsx")
+genus.median.dat.its <- dat.tax.merge.its.genus.corrected %>%
+  group_by(Genus) %>%
+  summarize(mean.eaf.genus = mean(observed_EAF, na.rm=TRUE))
+genus.median.lower.its <- dat.tax.merge.its.genus.corrected %>%
+  group_by(Genus) %>%
+  summarize(lower.genus = mean(lower, na.rm=TRUE)) 
+genus.median.upper.its <- dat.tax.merge.its.genus.corrected %>%
+  group_by(Genus) %>%
+  summarize(upper.genus = mean(upper, na.rm=TRUE)) 
+genus.median.resample.its <- dat.tax.merge.its.genus.corrected %>%
+  group_by(Genus) %>%
+  summarize(mean_resampled_EAF = mean(mean_resampled_EAF, na.rm=TRUE)) 
+genus.merge.its <- merge(genus.median.dat.its, genus.median.lower.its)
+genus.merge.its <- merge(genus.merge.its, genus.median.upper.its)
+genus.merge.its <- merge(genus.merge.its, genus.median.resample.its)
+#Add the phylum 
+genus_phylum_df.its <- select(dat.tax.merge.its.genus.corrected, Genus, Phylum)
+#Removing duplicates
+genus_phylum_df.its <- genus_phylum_df.its[!duplicated(genus_phylum_df.its$Genus), ]
+genus.median.taxonomy.its <- inner_join(genus.merge.its, genus_phylum_df.its, by="Genus")
+
+#Rainbow plot 
+library(ggplot2)
+mydat.its<-genus.median.taxonomy.its[order(genus.median.taxonomy.its$Phylum,-genus.median.taxonomy.its$mean.eaf.genus),]
+mydat.its$graph.order<-mydat.its$graph.order<-c(1:dim(mydat.its)[1])
+p.its <-ggplot(mydat.its,aes(x=factor(graph.order),mean.eaf.genus,ymin=lower.genus,ymax=upper.genus,color=Phylum)) +  
+geom_pointrange(size=0.25) + geom_linerange() + geom_hline(yintercept=0,linetype='dashed',alpha=0.5) +  
+labs(x="Genus",y="Atom Fraction Excess") + theme_classic() +   theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())
+p.its 
+
+##Plot OTUs instead of genera
+mydat.its.otu<-eaf_tax_its[order(eaf_tax_its$Phylum,-eaf_tax_its$mean_resampled_EAF),]
+mydat.its.otu$graph.order<-mydat.its.otu$graph.order<-c(1:dim(mydat.its.otu)[1])
+p.its.otu <-ggplot(mydat.its.otu,aes(x=factor(graph.order),mean_resampled_EAF,ymin=lower,ymax=upper,color=Phylum)) +  
+geom_pointrange(size=0.25) + geom_linerange() + geom_hline(yintercept=0,linetype='dashed',alpha=0.5) +  
+labs(x="Observed Taxa",y="Atom Fraction Excess") + theme_classic() +  theme(axis.text.x=element_blank(),axis.ticks.x=element_blank())
+p.its.otu
+
+#Combining 16S and ITS data created in previous steps 
+mydat.bact.fung.otu <- full_join(mydat.its.otu, mydat.asv)
+mydat.bact.fung.otu$Phylum <- gsub("p__", "", mydat.bact.fung.otu$Phylum)
+mydat.bact.fung.otu$Phylum <- gsub("k__", "", mydat.bact.fung.otu$Phylum)
+
+GenusColors <- c("unidentified Fungi"="#A6CEE3", "Ascomycota"="#1F78B4","Basidiomycota" = "#33A02C",  "Mortierellomycota"="#B2DF8A",
+"Acidobacteriota"= "#FB9A99", "Actinobacteriota" = "#E31A1C",  "Bacteroidota"= "#FDBF6F", "Bdellovibrionota"="#FF7F00","Cyanobacteria"="gold1", 
+"Fibrobacterota" = "#CAB2D6","Proteobacteria" = "#6A3D9A","Verrucomicrobiota"="#B15928")
+
+mydat.bact.fung.otu$graph.order<-mydat.bact.fung.otu$graph.order<-c(1:dim(mydat.bact.fung.otu)[1])
+p.bact.fung.otu <-ggplot(mydat.bact.fung.otu,aes(x=factor(graph.order),mean_resampled_EAF,ymin=lower,ymax=upper,color=Phylum)) +   
+geom_pointrange(size=0.25) + geom_linerange() + geom_hline(yintercept=0,linetype='dashed',alpha=0.5) +   
+labs(x="Observed Taxa",y="Atom Fraction Excess") + theme_classic() +   theme(axis.text.x=element_blank(),axis.ticks.x=element_blank()) +   
+scale_colour_manual(values = GenusColors)
+
+p.bact.fung.otu
+ggsave("p.bact.fung.observed.taxa.corrected.pdf", width=13, height=5.81)
