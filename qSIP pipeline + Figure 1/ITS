@@ -1,0 +1,72 @@
+############################################################
+				qSIP Pipeline - ITS
+ ###########################################################
+#The qSIP2 package was used to calculate the excess atom fraction (EAF) for each fungal OTU. Please refer to the qSIP2 package page to adjust the analysis for your own study (https://github.com/jeffkimbrel/qSIP2).  
+library(qSIP2)
+source_df_its <- read_excel("gs_ITS_source_data.xlsx")
+source_object_its <- qsip_source_data(source_df_its,  isotope = "Isotope",  isotopolog = "isotopolog", source_mat_id = "source")
+class(source_object_its)
+colnames(source_df_its)
+colnames(source_object_its@data)
+sample_df_its <- read_excel("gs_ITS_sample_data.corrected.xlsx")
+sample_df_its <- sample_df_its |>
+  add_gradient_pos_rel_amt(source_mat_id = "source", amt = "avg_ITS_copies_ul")
+sample_df_its |>
+  group_by(source) |>
+  summarize(
+    qPCR_copies = sum(avg_ITS_copies_ul),
+    Relative = sum(gradient_pos_rel_amt)
+  ) |>
+  head() |>
+  knitr::kable()
+sample_object_its <- qsip_sample_data(sample_df_its, sample_id = "sample", source_mat_id = "source", gradient_position = "fraction", gradient_pos_density = "density_g_ml", gradient_pos_amt = "avg_ITS_copies_ul", gradient_pos_rel_amt = "gradient_pos_rel_amt")
+class(sample_object_its)
+feature_df_its <- read_excel("gs_feature_table-ITS.xls")
+feature_object_its <- qsip_feature_data(feature_df_its, feature_id = "ASV")
+class(feature_object_its)
+qsip_object_its <- qsip_data( source_data = source_object_its, sample_data = sample_object_its, feature_data = feature_object_its)
+class(qsip_object_its)
+#Plotting gene copies
+ ############################################################
+			Density plot - Figure 1 (ITS) 
+###########################################################
+#Calculating the mean of gene copies across isotope treatment and fractions
+sample_df_its2 <- sample_df_its %>% 
+  group_by(label_fraction) %>% 
+  mutate(mean_density_g_ml = mean(density_g_ml))
+sample_df_its2 <- sample_df_its2 %>% 
+  group_by(label_fraction) %>% 
+  mutate(mean_avg_ITS_copies_ul = mean(avg_ITS_copies_ul))
+sample_df_its2 <- sample_df_its2 %>% 
+  group_by(label) %>% 
+  mutate(mean_density_g_ml_label = mean(density_g_ml))
+colors <- c(  "12C" = "cornflowerblue",  "13C" = "firebrick")
+densityits <- ggplot(sample_df_its2, aes(mean_density_g_ml, mean_avg_ITS_copies_ul, color = label)) +  
+geom_line(aes(group = source), linewidth = 1) +  geom_point(size = .8) + theme(legend.position = c(1, 1),  legend.justification = c(1, 1)) +  
+scale_color_manual(values = colors) + theme_bw() + labs(x="DNA density", y ="Average fungal gene copies/ul", tag="A") + 
+geom_vline(aes(xintercept=mean_density_g_ml_label, color=label), linetype="dashed") 
+densityits
+
+#combining 16S and ITS density plots
+library("patchwork")
+densityits + density16s
+ggsave("bact.fung.density.avg.corrected.pdf", width = 18 ,height = 8)
+###########################################################
+
+## Filter features - keeping OTUs that are present in all 3 samples and at least 1 fraction.
+qsip_filter_its <- run_feature_filter(qsip_object_its,  unlabeled_source_mat_ids = get_all_by_isotope(qsip_object_its, "12C"),  labeled_source_mat_ids = c("S12", "S14", "S20"), min_unlabeled_sources = 3,  min_labeled_sources = 3, min_unlabeled_fractions = 1, min_labeled_fractions = 1)
+#Results: filtering kept 37 OTUs.
+plot_filter_gradient_position(qsip_filter_its)
+#Although a large number of features were removed, we can tell that the 37 that remained still make up a large proportion of the total abundance in each sample (~99% of the total data). 
+qsip_filter_its <- run_resampling(qsip_filter_its, resamples = 1000, with_seed = 17)
+qsip_filter_17_again_its <- run_resampling(qsip_filter_its, resamples = 1000, with_seed = 17)
+# two runs are identical
+identical(qsip_filter_its, qsip_filter_17_again_its)
+identical(qsip_filter_its@resamples$l[[334]], qsip_filter_17_again_its@resamples$l[[334]])
+# EAF Calculations
+qsip_filter_its <- run_EAF_calculations(qsip_filter_its)
+filter_its <- summarize_EAF_values(qsip_filter_its, confidence = 0.9)
+eaf_its <- rbind(filter_its)
+#Adding taxonomy data
+taxonomy_ITS_qSIP <- read_excel("taxonomy_ITS_qSIP.xlsx")
+eaf_tax_its <- inner_join(eaf_its, taxonomy_ITS_qSIP, by="feature_id")
