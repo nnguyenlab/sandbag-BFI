@@ -1,0 +1,75 @@
+############################################################
+				qSIP Pipeline - 16S
+ ###########################################################
+#The qSIP2 package was used to calculate the excess atom fraction (EAF) for each bacterial/archaeal ASV. Please refer to the qSIP2 package page to adjust the analysis for your own study (https://github.com/jeffkimbrel/qSIP2).  
+library(qSIP2)
+#Importing dataset from excel - source data
+source_df <- read_excel("gs_source_data.xlsx")
+#Convert it to a qsip_source_data object. 
+source_object <- qsip_source_data(source_df,  isotope = "Isotope",  isotopolog = "isotopolog", source_mat_id = "source")
+class(source_object)
+#Importing sample data
+sample_df <- read_excel("gs_sample_data.xlsx")
+sample_df <- sample_df |>
+  add_gradient_pos_rel_amt(source_mat_id = "source", amt = "avg_16S_copies_ul")
+sample_df |>
+  group_by(source) |>
+  summarize(
+    qPCR_copies = sum(avg_16S_copies_ul),
+    Relative = sum(gradient_pos_rel_amt)
+  ) |>
+  head() |>
+  knitr::kable()
+#Make a qSIP2 object for this data, this time as a qsip_sample_data object. 
+sample_object <- qsip_sample_data(sample_df, sample_id = "sample",source_mat_id = "source", gradient_position = "fraction", gradient_pos_density = "density_g_ml",  gradient_pos_amt = "avg_16S_copies_ul",  gradient_pos_rel_amt = "gradient_pos_rel_amt")
+class(sample_object)
+#Importing feature data
+feature_df <- read_excel("gs_feature-table-16S.xlsx")
+feature_object <- qsip_feature_data(feature_df, feature_id = "ASV")
+class(feature_object)
+# Making the qsip_data`object
+qsip_object <- qsip_data(source_data = source_object, sample_data = sample_object, feature_data = feature_object)
+class(qsip_object) #Creation of this object also runs some other calculations, particularly getting the weighted-average density (WAD) for each feature in each source, and also the tube relative abundance of each feature. 
+#Visualizing
+plot_sample_curves(qsip_object)
+
+############################################################
+		Density plot - Figure 1 (16S) 
+###########################################################
+#Calculating the mean of gene copies by isotope treatment and fractions
+sample_df2 <- sample_df %>% 
+  group_by(label_fraction) %>% 
+  mutate(mean_density_g_ml = mean(density_g_ml))
+sample_df2 <- sample_df2 %>% 
+  group_by(label_fraction) %>% 
+  mutate(mean_avg_16S_copies_ul = mean(avg_16S_copies_ul))
+sample_df2 <- sample_df2 %>% 
+  group_by(label) %>% 
+  mutate(mean_density_g_ml_label = mean(density_g_ml))
+colors <- c( "12C" = "cornflowerblue", "13C" = "firebrick")
+density16s <- ggplot(sample_df2,  aes(mean_density_g_ml, mean_avg_16S_copies_ul, color = label)) +  
+geom_line(aes(group = source), linewidth = 1) +  geom_point(size = .8) + theme(legend.position = c(1, 1),   legend.justification = c(1, 1)) + 
+scale_color_manual(values = colors) + theme_bw() + labs(y = "Average bacterial gene copies/ul", x = "DNA density", tag="B") + 
+geom_vline(aes(xintercept=mean_density_g_ml_label, color=label), linetype="dashed") + geom_smooth(se = FALSE)
+###########################################################
+
+## Filter features - keeping ASVs that are present in all 3 samples and in at least 3 fractions
+qsip_filter <- run_feature_filter(qsip_object,  unlabeled_source_mat_ids = get_all_by_isotope(qsip_object, "12C"), labeled_source_mat_ids = c("S12", "S14", "S20"),  min_unlabeled_sources = 3, min_labeled_sources = 3, min_unlabeled_fractions = 3, min_labeled_fractions = 3)
+#Filtering kept 214 features from the dataset. 
+plot_filter_gradient_position(qsip_filter)
+#Although a large number of features were removed, we can tell that the 214 that remained actually still make up a large proportion of the total abundance in each sample (~92-95% of the total data). 
+#In order to calculate the confidence interval for the EAF values, we first need to run a resampling/bootstrapping procedure on the WAD values.
+qsip_filter <- run_resampling(qsip_filter, resamples = 1000,  with_seed = 17)
+#sanity check
+qsip_filter_17_again <- run_resampling(qsip_filterresamples = 1000,  with_seed = 17)
+# two runs are identical
+identical(qsip_filter, qsip_filter_17_again)
+identical(qsip_filter@resamples$l[[334]], qsip_filter_17_again@resamples$l[[334]])
+#Calculating and summarizing the excess atom fraction (EAF) values. 
+#There are two functions to run, the first (`run_EAF_calculations()`) that calculate EAF for the observed data and all resamplings, and the second (`summarize_EAF_values()`) that summarizes that data at a chosen confidence interval.
+qsip_filter <- run_EAF_calculations(qsip_filter)
+filter <- summarize_EAF_values(qsip_filter, confidence = 0.9)
+eaf <- rbind(filter)
+#Adding taxonomy data
+eaf_tax <- inner_join(eaf, taxonomy_16S, by="feature_id")
+write.xlsx(eaf_tax, file="eaf_tax.xlsx")
