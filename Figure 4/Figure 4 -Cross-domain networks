@@ -4,7 +4,7 @@
 #Network was created using the Molecular Ecological Network Analysis Pipeline (http://ieg2.ou.edu/MENA) and visualized using Gephi. 
 #The MENAP pipeline does not offer the centered-log-ratio (clr) transformation option for bacteria and fungi individually. 
 #Here, I will calculate the clr transformation for each dataset (16S and ITS) separately using the original dataset. 
-#Later, the fungal and bacterial clr transformed table will be combined, filtered, and run through MENAP.
+#Later, the fungal and bacterial clr transformed tables will be combined, filtered, and run through MENAP.
 
 #Both 12C- and 13C-networks were created using the same pipeline. However, for the 13C-network we kept only labeled samples and significantly labeled organisms. 
 #For the 12C-network we kept only unlabeled samples but all organisms (taxa that sum up to 0 should be excluded - see notes at the end of the pipeline).
