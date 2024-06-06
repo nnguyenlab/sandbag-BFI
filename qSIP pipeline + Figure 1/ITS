@@ -1,5 +1,5 @@
 ############################################################
-				qSIP Pipeline - ITS
+		qSIP Pipeline - ITS
  ###########################################################
 #The qSIP2 package was used to calculate the excess atom fraction (EAF) for each fungal OTU. Please refer to the qSIP2 package page to adjust the analysis for your own study (https://github.com/jeffkimbrel/qSIP2).  
 library(qSIP2)
@@ -28,7 +28,7 @@ qsip_object_its <- qsip_data( source_data = source_object_its, sample_data = sam
 class(qsip_object_its)
 #Plotting gene copies
  ############################################################
-			Density plot - Figure 1 (ITS) 
+		Density plot - Figure 1 (ITS) 
 ###########################################################
 #Calculating the mean of gene copies across isotope treatment and fractions
 sample_df_its2 <- sample_df_its %>% 
