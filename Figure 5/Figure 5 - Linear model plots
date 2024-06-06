@@ -1,0 +1,17 @@
+############################################################
+		Linear model - Fungal-bacterial relationship Figure 5
+ ###########################################################
+library(readxl)
+library(ggplot2)
+library(ggpmisc)
+#Use clr transformed data to run the linear regression models. 
+#Reading a excel file that contains abundance data (clr transformed) calculated in the previous network step for bacteria and fungi.
+#In this excel file I only have clr transformed abundance data from labeled samples and singificant labeled taxa; because I'm intered in looking at the fungal-bacterial relationships observed on the 13C-network. 
+correlation_check <- read_excel("correlation_check.xlsx")
+g1 <- ggplot(correlation_check, aes(279ec18ace7a45fb812a87c1452ae4c7,	393357597ca031b79ce2eba38c46323c)) + 
+geom_smooth(method = lm, fill="gold1") +  stat_poly_line(color="gold1") +  stat_poly_eq() +  geom_point() + theme_bw() + 
+xlab("Peredibacter") + ylab("Podospora") +  theme(axis.title.y = element_text(face = "italic"), axis.title.x = element_text(face = "italic"))
+lm.g1 <- lm(279ec18ace7a45fb812a87c1452ae4c7 ~ 393357597ca031b79ce2eba38c46323c, data=correlation_check_90)
+summary(lm.g1)  
+residuals(lm.g1)
+#Run this for every pair (bact-bact, bact-fung, or fung-fung) that you're interested.
