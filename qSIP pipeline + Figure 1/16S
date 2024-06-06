@@ -1,5 +1,5 @@
 ############################################################
-				qSIP Pipeline - 16S
+		qSIP Pipeline - 16S
  ###########################################################
 #The qSIP2 package was used to calculate the excess atom fraction (EAF) for each bacterial/archaeal ASV. Please refer to the qSIP2 package page to adjust the analysis for your own study (https://github.com/jeffkimbrel/qSIP2).  
 library(qSIP2)
