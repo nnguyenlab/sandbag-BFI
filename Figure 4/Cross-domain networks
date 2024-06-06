@@ -1,0 +1,127 @@
+############################################################
+		Cross-domain network Figure 4
+ ###########################################################
+#Network was created using the Molecular Ecological Network Analysis Pipeline (http://ieg2.ou.edu/MENA) and visualized using Gephi. 
+#The MENAP pipeline does not offer the centered-log-ratio (clr) transformation option for bacteria and fungi individually. 
+#Here, I will calculate the clr transformation for each dataset (16S and ITS) separately using the original dataset. 
+#Later, the fungal and bacterial clr transformed table will be combined, filtered, and run through MENAP.
+
+#Both 12C- and 13C-networks were created using the same pipeline. However, for the 13C-network we kept only labeled samples and significantly labeled organisms. 
+#For the 12C-network we kept only unlabeled samples but all organisms (taxa that sum up to 0 should be excluded - see notes at the end of the pipeline).
+
+#Create a phyloseq object for 16S data
+library("readxl")
+library("phyloseq")
+library("ggplot2")
+library("dplyr")
+library("ggpubr")
+
+otu_mat <- read_excel("net_bact_tax.xlsx")
+tax_mat <- read_excel("net_bact_taxonomy.xlsx")
+samples_df <- read_excel("gs_sample_data.xlsx")
+
+#Define row names
+otu_mat <- otu_mat %>%
+  tibble::column_to_rownames("feature_id")
+tax_mat <- tax_mat %>% 
+  tibble::column_to_rownames("feature_id")
+samples_df <- samples_df %>% 
+  tibble::column_to_rownames("sample") 
+
+##Transform into matrix
+otu_mat <- as.matrix(otu_mat)
+tax_mat <- as.matrix(tax_mat)
+
+#Transform to phyloseq objects
+OTU = otu_table(otu_mat, taxa_are_rows = TRUE)
+TAX = tax_table(tax_mat)
+samples = sample_data(samples_df)
+
+bacteria_network <- phyloseq(OTU, TAX, samples)
+bacteria_network
+
+#Clr transform on original data
+bact.clr <-  microbiome::transform(bacteria_network, "clr")
+bact.clr.df <- otu_table(bact.clr)
+bact.clr.df <- as.data.frame(bact.clr.df)
+
+#Original data
+otu_table_bacteria_network <- otu_table(bacteria_network)
+original_bact.df <- as.data.frame(otu_table_bacteria_network)
+
+#Replace clr transform values only for non zero
+# Identify cells with values different from 0 in the original dataset
+non_zero_cells_bact <- original_bact.df != 0
+
+#Create a copy of the original dataset
+updated_bact_df <- original_bact.df
+
+#Replace non-zero cells with CLR-transformed values
+updated_bact_df[non_zero_cells_bact] <- bact.clr.df[non_zero_cells_bact]
+
+# Print the resulting dataset
+print(updated_bact_df)
+
+#Keep these values for the taxa that passed the filtering prevalence; this can be done on MENAP.
+
+#Write dataset to input at MENAP 
+library("xlsx")
+write.xlsx(x = updated_bact_df, file = "updated_bact_df_network.xlsx")
+
+#Create a phyloseq object for ITS data
+otu_mat_fung <- read_excel("net_fung_tax.xlsx")
+tax_mat_fung <- read_excel("net_fung_taxonomy.xlsx")
+samples_df_fung <- read_excel("gs_sample_data.xlsx")
+
+#Define row names
+otu_mat_fung <- otu_mat_fung %>%
+  tibble::column_to_rownames("feature_id")
+tax_mat_fung <- tax_mat_fung %>% 
+  tibble::column_to_rownames("feature_id")
+samples_df_fung <- samples_df_fung %>% 
+  tibble::column_to_rownames("sample") 
+
+#Transform into matrix
+otu_mat_fung <- as.matrix(otu_mat_fung)
+tax_mat_fung <- as.matrix(tax_mat_fung)
+
+#Transform to phyloseq objects
+OTU_fung = otu_table(otu_mat_fung, taxa_are_rows = TRUE)
+TAX_fung = tax_table(tax_mat_fung)
+samples_fung = sample_data(samples_df_fung)
+
+fung_network <- phyloseq(OTU_fung, TAX_fung, samples_fung)
+fung_network
+
+#Clr transform on original data
+fung.clr <-  microbiome::transform(fung_network, "clr")
+fung.clr.df <- otu_table(fung.clr)
+fung.clr.df <- as.data.frame(fung.clr.df)
+
+#Original data
+otu_table_fung_network <- otu_table(fung_network)
+original_fung.df <- as.data.frame(otu_table_fung_network)
+
+#Replace clr transform values only for non zero
+# Identify cells with values different from 0 in the original dataset
+non_zero_cells_fung <- original_fung.df != 0
+
+#Create a copy of the original dataset
+updated_fung_df <- original_fung.df
+
+#Replace non-zero cells with CLR-transformed values
+updated_fung_df[non_zero_cells_fung] <- fung.clr.df[non_zero_cells_fung]
+
+#Print the resulting dataset
+print(updated_fung_df)
+
+#Keep these values for the taxa that passed the filtering prevalence; this can be done at MENAP.
+
+#Write dataset to input at MENAP 
+library("xlsx")
+write.xlsx(x = updated_fung_df, file = "updated_fung_df_network.xlsx")
+#write.csv(x = updated_fung_df, file = "updated_fung_df.csv")
+
+#Next step is to combine the two tables, filter samples for each network,and run it through MENAP.
+#Note: original abundance table was used for clr calculation.
+#Note: for the 12C-network it is necessary to remove taxa that sum up to zero, this step is not necessary for 13C-networks since the data was previously filtered including only significantly labeled taxa. 
