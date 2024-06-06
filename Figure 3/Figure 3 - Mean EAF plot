@@ -1,0 +1,97 @@
+ ############################################################
+		EAF by genus plot - 16S and ITS combined - Figure 3
+ ###########################################################
+#Mean EAF grouped by genera (16S) 
+#We used BLAST to identify some of the unidentified ASVs to the genus level
+# I will import the excel file that has the updated taxonomy 
+dat.tax.merge.genus.corrected <- read_excel("eaf_tax.corrected.xlsx")
+genus.median.dat <- dat.tax.merge.genus.corrected %>%
+group_by(Genus) %>%
+summarize(mean.eaf.genus = mean(observed_EAF, na.rm=TRUE))
+genus.median.lower <- dat.tax.merge.genus.corrected %>%
+group_by(Genus) %>%
+summarize(lower.genus = mean(lower, na.rm=TRUE)) 
+genus.median.upper <- dat.tax.merge.genus.corrected %>%
+group_by(Genus) %>%
+summarize(upper.genus = mean(upper, na.rm=TRUE)) 
+genus.median.resample <- dat.tax.merge.genus.corrected %>%
+group_by(Genus) %>%
+summarize(mean_resampled_EAF = mean(mean_resampled_EAF, na.rm=TRUE)) 
+genus.merge <- merge(genus.median.dat, genus.median.lower)
+genus.merge <- merge(genus.merge, genus.median.upper)
+genus.merge <- merge(genus.merge, genus.median.resample)
+#Add the phylum 
+genus_phylum_df <- select(dat.tax.merge.genus.corrected, Genus, Phylum)
+#Removing duplicates
+genus_phylum_df <- genus_phylum_df[!duplicated(genus_phylum_df$Genus), ]
+genus.median.taxonomy <- inner_join(genus.merge, genus_phylum_df, by="Genus")
+PhylaColors <- c("Cyanobacteria"="#1c9e77", "Proteobacteria"="#756fb4", "Actinobacteriota"="#f45c85",   "Bacteroidota"="#1c67dd", "Bdellovibrionota"="gold1")
+  genus.bact <- genus.median.taxonomy %>%
+  slice_max(mean.eaf.genus, n = 25) %>%
+  arrange(by_group= "mean_resampled_EAF") 
+genus.bact$Phylum <- gsub("p__", "", genus.bact$Phylum)
+genus.bact$Genus <- gsub("g__", "", genus.bact$Genus)
+# Manually reorder the levels of Genus from A-Z
+genus.bact$Genus <- factor(genus.bact$Genus, levels = rev(sort(genus.bact$Genus)))
+levels(genus.bact$Genus)
+genus.bact.plot <- ggplot(genus.bact, aes(x=mean_resampled_EAF, y=Genus, color=Phylum, alpha=1)) +   geom_point(size=2, stroke = 0.8) +  
+geom_errorbar(aes(xmin = lower.genus, xmax = upper.genus)) + theme(axis.text.x = element_text(angle = 0, hjust = 1, vjust=0.25, size="fit")) + 
+theme(legend.position="none") +   geom_vline(xintercept = 0, linetype = "solid", color = "black") +  labs(x="Atom Fraction Excess", y ="Genus", tag="B") + 
+theme(plot.tag = element_text(size=20))
+genus.bact.plot2 <- genus.bact.plot +   facet_grid(Phylum~., scales= "free_y", space="free_y", switch = "y") +   scale_y_discrete(position = "right") +  
+theme(strip.text.y.left = element_text(angle = 0)) +   theme(axis.text.y=element_text(size=6, face="italic")) +   theme(axis.title.y=element_blank()) + 
+theme(panel.spacing = unit(0.3, "lines")) +   theme(text = element_text(size = 8)) +   scale_colour_manual(values = PhylaColors)
+genus.bact.plot2
+
+#Mean EAF grouped by genera (ITS) 
+#We used BLAST to identify some of the unidentified OTUs to the genus level
+#Next I will import the excel file that has the updated taxonomy 
+dat.tax.merge.its.genus.corrected <- read_excel("eaf_tax_ITS_corrected2.xlsx")
+genus.median.dat.its <- dat.tax.merge.its.genus.corrected %>%
+  group_by(Genus) %>%
+  summarize(mean.eaf.genus = mean(observed_EAF, na.rm=TRUE))
+genus.median.lower.its <- dat.tax.merge.its.genus.corrected %>%
+  group_by(Genus) %>%
+  summarize(lower.genus = mean(lower, na.rm=TRUE)) 
+genus.median.upper.its <- dat.tax.merge.its.genus.corrected %>%
+  group_by(Genus) %>%
+  summarize(upper.genus = mean(upper, na.rm=TRUE)) 
+genus.median.resample.its <- dat.tax.merge.its.genus.corrected %>%
+  group_by(Genus) %>%
+  summarize(mean_resampled_EAF = mean(mean_resampled_EAF, na.rm=TRUE)) 
+genus.merge.its <- merge(genus.median.dat.its, genus.median.lower.its)
+genus.merge.its <- merge(genus.merge.its, genus.median.upper.its)
+genus.merge.its <- merge(genus.merge.its, genus.median.resample.its)
+#Add the phylum 
+genus_phylum_df.its <- select(dat.tax.merge.its.genus.corrected, Genus, Phylum)
+#Removing duplicates
+genus_phylum_df.its <- genus_phylum_df.its[!duplicated(genus_phylum_df.its$Genus), ]
+genus.median.taxonomy.its <- inner_join(genus.merge.its, genus_phylum_df.its, by="Genus")
+FungalColors = c("Ascomycota"="#1c6d77", "Basidiomycota"="#FD8D3C", "unidentified Fungi"="#7a81ff")
+library("dplyr")
+genus.fung <- genus.median.taxonomy.its %>%
+  slice_max(mean.eaf.genus, n = 15) %>%
+  arrange(by_group= "mean_resampled_EAF") 
+#Changing "k__Fungi" to Ascomycota, because both of these two unidentified OTUs are from this phylum (according to BLAST)
+#Adding BLAST taxonomy
+genus.fung$Phylum <- gsub("k__Fungi", "p__Ascomycota", genus.fung$Phylum)
+genus.fung$Phylum <- gsub("p__", "", genus.fung$Phylum)
+#genus.fung$Phylum <- gsub("k__", "", genus.fung$Phylum)
+genus.fung$Genus <- gsub("g__", "", genus.fung$Genus)
+#Manually reorder the levels of Genus from A-Z
+genus.fung$Genus <- factor(genus.fung$Genus, levels = rev(sort(genus.fung$Genus)))
+levels(genus.fung$Genus)
+genus.fung.plot <- ggplot(genus.fung, aes(x=mean_resampled_EAF, y=Genus, color=Phylum, alpha=1)) +   
+geom_point(size=2, stroke = 0.8) +   geom_errorbar(aes(    xmin = lower.genus, xmax = upper.genus)) +  
+theme(axis.text.x = element_text(angle = 0, hjust = 1, vjust=0.25, size="fit")) +   theme(legend.position="none") + 
+geom_vline(xintercept = 0, linetype = "solid", color = "black") +   labs(x="Atom Fraction Excess", y ="Genus", tag="A") +   
+theme(plot.tag = element_text(size=20))
+genus.fung.plot2 <- genus.fung.plot +   facet_grid(Phylum~., scales= "free_y", space="free_y", switch = "y") +
+scale_y_discrete(position = "right") +   theme(strip.text.y.left = element_text(angle = 0)) +  
+theme(axis.text.y=element_text(size=6, face="italic")) +   theme(axis.title.y=element_blank()) + 
+theme(panel.spacing = unit(0.3, "lines")) +   theme(text = element_text(size = 8)) + scale_colour_manual(values = FungalColors)
+genus.fung.plot2
+
+#Combining both 16S and ITS genera plots
+library("patchwork")
+genus.fung.plot2 + genus.bact.plot2
