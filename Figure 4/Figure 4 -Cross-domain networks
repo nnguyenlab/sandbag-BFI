@@ -124,4 +124,4 @@ write.xlsx(x = updated_fung_df, file = "updated_fung_df_network.xlsx")
 
 #Next step is to combine the two tables, filter samples for each network,and run it through MENAP.
 #Note: original abundance table was used for clr calculation.
-#Note: for the 12C-network it is necessary to remove taxa that sum up to zero, this step is not necessary for 13C-networks since the data was previously filtered including only significantly labeled taxa. 
+#Note: for the 12C-network it is necessary to remove taxa that sum up to zero, this step is not necessary for 13C-networks since the data is filtered to include only significantly labeled taxa. 
