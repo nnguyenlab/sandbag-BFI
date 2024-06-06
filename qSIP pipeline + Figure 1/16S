@@ -71,5 +71,5 @@ qsip_filter <- run_EAF_calculations(qsip_filter)
 filter <- summarize_EAF_values(qsip_filter, confidence = 0.9)
 eaf <- rbind(filter)
 #Adding taxonomy data
+taxonomy_16S <- read_excel("taxonomy_16S.xlsx")
 eaf_tax <- inner_join(eaf, taxonomy_16S, by="feature_id")
-write.xlsx(eaf_tax, file="eaf_tax.xlsx")
