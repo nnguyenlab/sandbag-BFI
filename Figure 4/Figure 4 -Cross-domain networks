@@ -6,8 +6,8 @@
 #Here, we calculated the clr transformation for each dataset (16S and ITS) separately using feature tables with absolute abundance. 
 #Later, the fungal and bacterial clr transformed tables will be combined, filtered, and run through MENA pipeline.
 
-#Both 12C- and 13C-networks were created using the same pipeline. However, for the 13C-network we kept only labeled samples and labeled ASVs and OTUs. 
-#For the 12C-network we kept only unlabeled samples but all ASVs and OTUs present in the dataset (taxa that sum up to 0 should be excluded - see notes at the end of the pipeline).
+#Both 12C- and 13C-networks were created using the same pipeline. However, for the 13C-network we kept only labeled samples and significantly labeled ASVs and OTUs. 
+#For the 12C-network we kept only unlabeled samples but all ASVs and OTUs that were present in the dataset (taxa that sum up to 0 should be excluded - see notes at the end of the pipeline).
 
 #Create a phyloseq object for 16S data
 library("readxl")
@@ -118,6 +118,8 @@ library("xlsx")
 write.xlsx(x = updated_fung_df, file = "updated_fung_df_network.xlsx")
 #write.csv(x = updated_fung_df, file = "updated_fung_df.csv")
 
-#Next step is to combine the bacterial and fungal tables, select samples (labeled samples for 13C-network and unlabeled samples for 12C-network), filter significantly labeled taxa (only significant for 13C-network),and run it through MENA pipeline.
-#Note: on MENA we kept the calculated values for the taxa that passed the filtering prevalence criteria (taxa that were present in at least 11 of the 21 samples).
-#Note: for the 12C-network it is necessary to remove taxa that sum up to zero before MENA pipeline. This step is not necessary for 13C-networks since the data is already being filtered to include only significantly labeled taxa. 
+#Next step is to combine the bacterial and fungal tables for each network and run it through the MENA pipeline.
+
+#On MENA we used a prevalence criteria to filter out taxa that were not present in at least 11 of the 21 samples.
+#For the 12C-network is necessary to remove taxa that sum up to zero before constructing the network. 
+#Note: This step is not necessary for 13C-networks since the data was already filtered to include only significantly labeled taxa. 
